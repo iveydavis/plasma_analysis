@@ -7,10 +7,12 @@ Created on Tue Feb 17 11:23:12 2026
 """
 from astropy import units as un, constants as const
 import numpy as np
+import matplotlib.pyplot as plt
 
 e = const.e.gauss.value * un.cm**1.5 * un.g**0.5/un.s
 G = (un.erg/un.cm**3)**0.5
 
+plot_props = {}
 
 def speed_to_rel_corr_energy(v):
     if type(v) != un.quantity.Quantity:
@@ -43,3 +45,10 @@ def density_to_frequency(density):
         density *= un.cm**-3
     freq = 9.8 * un.kHz.to('MHz') * np.sqrt(density.to('cm**-3').value) * un.MHz
     return freq
+
+def frequency_to_density(frequency):
+    if type(frequency) != un.quantity.Quantity:
+        print("No units provided, assuming in MHz")
+        frequency *= un.MHz
+    dens = ((frequency/(9.8*un.kHz)).to(''))**2
+    return dens * un.cm**-3

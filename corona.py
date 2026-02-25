@@ -5,8 +5,7 @@ Created on Tue Feb 17 11:16:18 2026
 
 @author: idavis
 """
-from astropy import units as un, constants as const
-import numpy as np
+from misc import un, const, np, plt, calc_thermal_electron_speed
 from default_vals.corona_vals import default_corona_vals
 
 class Corona:
@@ -31,13 +30,13 @@ class Corona:
         
         self.c0 = np.sqrt(const.k_B * self.temp/ (const.m_p * self.mass_fraction)).to('km/s')
         self.rc = (const.G * self.star.M_star/2/self.c0**2).to('R_sun')
-        self.vthermal = np.sqrt(2 *const.k_B * self.temp/(const.m_p * self.mass_fraction) )
+        self.vthermal = np.sqrt(2 *const.k_B * self.temp/(const.m_e * self.mass_fraction) )
         if process:
             self.get_parker_solutions()
         return
     
     
-    def get_parker_solutions(self, starting_resolution = 5000, max_iter=500, prec=1e-3):
+    def get_parker_solutions(self, starting_resolution = 5000, max_iter=500, prec=1e-3, find_open=True, alf_dist=None):
         velocities = np.zeros(len(self.r_vec)) * un.km/un.s
         
         for i,r in enumerate(self.r_vec):
@@ -98,25 +97,32 @@ class Corona:
         diff = velocities - np.roll(velocities, 1)
         failed_idx = np.where(diff == 0)[0]
         if len(failed_idx) > 0:
-            i0 = failed_idx[0]
-            ie = failed_idx[-1]
             buff = int(self.r_res/1000) + 2
+            i0 = failed_idx[0] - buff
+            ie = failed_idx[-1] + buff
+            if i0 < 1:
+                i0 = 1
             
-            dx = ie  - i0 + 2*buff
-            dy = velocities[ie + buff] - velocities[i0 - buff]
+            dx = ie  - i0 
+            dy = velocities[ie] - velocities[i0]
             slope = dy/dx
-            velocities[i0 - buff: ie+buff] = slope * np.linspace(1, dx, dx) + velocities[i0 - buff-1]
+            velocities[i0:ie] = slope * np.linspace(1, dx, dx) + velocities[i0-1]
             
         density = self.n0 * self.mass_fraction*const.m_p*(self.r_vec[0]/self.r_vec)**2 * (velocities[0]/velocities)
         B_field = self.B0/((self.r_vec/self.star.R_star).to(''))**3
-        alf_speed = (B_field/np.sqrt(density * 4 * np.pi)).to('km/s')        
-        try:
-            alf_idx = np.where(alf_speed < velocities)[0][0]
-            density[alf_idx:] = density[alf_idx] *  (self.r_vec[alf_idx]/self.r_vec[alf_idx:])**2
-            velocities[alf_idx:] = velocities[alf_idx]
-            B_field[alf_idx:] = B_field[alf_idx] *  (self.r_vec[alf_idx]/self.r_vec[alf_idx:])**2
-        except:
-            print("No Alfven radius found")
+        alf_speed = (B_field/np.sqrt(density * 4 * np.pi)).to('km/s')   
+        if find_open:
+            try:
+                if alf_dist is None:
+                    alf_idx = np.where(alf_speed < velocities)[0][0]
+                elif alf_dist is not None:
+                    alf_idx = np.where(self.r_vec > alf_dist)[0][0]
+                density[alf_idx:] = density[alf_idx] *  (self.r_vec[alf_idx]/self.r_vec[alf_idx:])**2
+                velocities[alf_idx:] = velocities[alf_idx]
+                B_field[alf_idx:] = B_field[alf_idx] *  (self.r_vec[alf_idx]/self.r_vec[alf_idx:])**2
+                self.alf_dist = self.r_vec[alf_idx]
+            except:
+                print("No Alfven radius found")
             
         self.mag_field_profile = B_field
         self.mass_density_profile = density

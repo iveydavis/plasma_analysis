@@ -6,24 +6,47 @@ Created on Thu Feb 12 11:10:40 2026
 @author: idavis
 """
 
-import matplotlib.pyplot as plt
-from misc import un, const, G, density_to_frequency, np
+from misc import un, const, G, density_to_frequency, np, plt, frequency_to_density
 from default_vals.burst_vals import default_ii_vals, default_iii_vals
 
-
-class Type_III_Burst:
+C_sun = 4.22e36 * un.Hz
+class Burst:
+    def __init__(self, **kwargs):
+        self.corona = kwargs['corona']
+        self.vb = kwargs['vb']
+        self.starting_height = kwargs['starting_height_factor'] * self.corona.star.R_star
+        return
+    
+    def get_frequency_profile(self):
+        return
+    
+    def make_dynamic_spectrum(self):
+        return
+    
+    def plot_dyn_spec(self, cmap='magma', interpolation='nearest'):
+        
+        fig, ax = plt.subplots()
+        ax.imshow(self.dyn_spec, aspect='auto', origin='lower', extent=self.extents, interpolation=interpolation, cmap=cmap)
+        ax.tick_params(axis = 'both', which='both', labelsize=15)
+        ax.set_ylim(self.extents[2], self.extents[3])
+        ax.set_xlim(self.extents[0], self.extents[1])
+        ax.set_ylabel("Frequency [MHz]", fontsize = 18, multialignment='center')
+        ax.set_xlabel("Time since flare onset [min]", fontsize = 18)
+        fig.tight_layout()
+        return
+#####################################################################
+    
+    
+class Type_III_Burst(Burst):
     def __init__(self, **kwargs):
         for k in list(default_iii_vals.keys()):
             if k not in list(kwargs.keys()):
                 kwargs.update({k:default_iii_vals[k]}) 
-        self.corona = kwargs['corona']
-        self.vb = kwargs['vb']
-        self.spec_idx = kwargs['spec_idx']
-        self.starting_height = kwargs['starting_height_factor'] * self.corona.star.R_star
-        return
-    
-    
-    def get_frequency_profile(self, duration=10*un.min, t_res:int = 1000, propagation='radial', do_return=False):
+        super().__init__(corona = kwargs['corona'], vb = kwargs['vb'], starting_height_factor=kwargs['starting_height_factor'])
+        return 
+     
+        
+    def get_frequency_profile(self, duration=10*un.min, t_res:int = 1*un.s, propagation='radial', do_return=False):
         propagation = propagation.lower()
         propagations = ['radial', 'spiral']
         assert(propagation in propagations), f"{propagation} not a recognized propagation profile ({propagations})"
@@ -32,9 +55,9 @@ class Type_III_Burst:
         for lk in locs.keys():
             self.__dict__.update({lk:locs[lk]})
             
-        tvec = np.linspace(0*un.s, duration, t_res)
-        freqs = np.zeros(t_res)*un.MHz
-        dists = np.zeros(t_res) * un.cm
+        tvec =  np.arange(0,duration.to('s').value + 1, t_res.to('s').value) * un.s
+        freqs = np.zeros(len(tvec))*un.MHz
+        dists = np.zeros(len(tvec)) * un.cm
         if propagation == 'radial' or 'spiral':
             for i, t in enumerate(tvec):
                 dist = t * self.vb + self.starting_height
@@ -60,70 +83,62 @@ class Type_III_Burst:
         while i < len(nuvec) - 1:
             subband_extents.append([nuvec[i], nuvec[i] + 1])
             i += 1
-        sb = np.array(subband_extents)
-        
-        dyn_spec = np.zeros((len(tvec), len(nuvec))) 
-        for i, t in enumerate(tvec):
-            dist = self.starting_height + self.vb * t
-            density, idx = self.corona.get_density(dist, return_idxs=True)
-            nu = density_to_frequency(density).to('MHz').value
             
-            if nu_min <= nu <= nu_max:
-                diff = np.transpose(sb - nu)
-                idx = np.where((diff[0] <= 0) & (diff[1] >= 0))[0][0]
-                
-                t_dec= 10**7.7 * (nu * 1e6)**(-duration_exp) * duration_factor
+        sb = np.array(subband_extents)
+        dyn_spec = np.zeros((len(tvec), len(nuvec)))
+        densities = self.corona.number_density_profile
+        distances = self.corona.r_vec
+        velocities = self.corona.velocity_profile
+        for i, nu in enumerate(nuvec):
+            density = frequency_to_density(nu * un.MHz)
+            diff = np.abs(densities - density)
+            idx = np.where(diff == np.nanmin(diff))[0]
+
+            t = self.corona.r_vec[idx]/self.vb
+            t_diff = np.abs(tvec - t)
+            t_idx = np.where(t_diff == np.nanmin(t_diff))[0][0]
+            
+            if t_idx == len(tvec) -1:
+                continue
+            
+            if idx < len(densities) - 1:
+                nu_c = (9.8 * un.kHz * np.sqrt((C_sun/(velocities[idx] * distances[idx]**2)).to('cm**-3').value)).to('Hz').value
+                t_dec = (10**7.71 /nu_c**0.95)[0]#*un.s
                 dt = np.round(t_dec/t_res.to('s').value).astype(int)
-                if t + dt*un.s > tvec[-1]:
-                    idx_t = -1
-                else:
-                    idx_t = i + dt
-                dyn_spec[i:idx_t,idx] = 1
-                if np.nansum(dyn_spec[i-1:i, idx+1]) == 0:
-                    try:
-                        freq_min_idx = np.where(dyn_spec[i-1,:] == 1)[0][0]
-                    except:
-                        freq_min_idx = -1
-                    dyn_spec[i:idx_t,idx:freq_min_idx] = 1
+                te_idx = t_idx + dt
+        
+                if te_idx > len(tvec):
+                    te_idx = len(tvec)
+                dyn_spec[t_idx:te_idx, i] = 1
+
         idxs = np.where(dyn_spec == 0)
         dyn_spec[idxs] = np.nan
         self.dyn_spec = dyn_spec.transpose()
         self.extents = [0, duration.to('min').value, nu_min, nu_max]
         return
     
+    
     def plot_dyn_spec(self, cmap='magma', interpolation='nearest'):
         assert('dyn_spec' in self.__dict__.keys()), "No dyn spec has been made to plot"
-        
-        fig, ax = plt.subplots()
-        ax.imshow(self.dyn_spec, aspect='auto', origin='lower', extent=self.extents, interpolation=interpolation, cmap=cmap)
-        ax.tick_params(axis = 'both', which='both', labelsize=15)
-        ax.set_ylim(self.extents[2], self.extents[3])
-        ax.set_xlim(self.extents[0], self.extents[1])
-        ax.set_ylabel("Frequency [MHz]", fontsize = 18, multialignment='center')
-        ax.set_xlabel("Time since flare onset [min]", fontsize = 18)
-        fig.tight_layout()
+        super().plot_dyn_spec(cmap=cmap, interpolation=interpolation)
         return
-
-
 #####################################################################
 
 
-
-class Type_II_Burst:
+class Type_II_Burst(Burst):
     def __init__(self, **kwargs):
         for k in list(default_ii_vals.keys()):
             if k not in list(kwargs.keys()):
                 kwargs.update({k:default_ii_vals[k]}) 
         
         assert(kwargs['starting_height_factor'] > kwargs['starting_width_factor']/2)
-        self.corona = kwargs['corona']
-        self.vb = kwargs['vb']
-        self.starting_height = kwargs['starting_height_factor'] * self.corona.star.R_star
+        super().__init__(corona = kwargs['corona'], vb = kwargs['vb'], starting_height_factor=kwargs['starting_height_factor'])
         self.starting_width = kwargs['starting_width_factor']  * self.corona.star.R_star
         self.width_growth_factor = kwargs['width_growth_factor']
         return
     
-    def get_frequency_profile(self, duration=30*un.min, t_res:int = 1000, propagation='radial', do_return=False):
+       
+    def get_frequency_profile(self, duration=30*un.min, t_res=1*un.s, propagation='radial', do_return=False):
         propagation = propagation.lower()
         propagations = ['radial', 'spiral']
         assert(propagation in propagations), f"{propagation} not a recognized propagation profile ({propagations})"
@@ -132,9 +147,9 @@ class Type_II_Burst:
         for lk in locs.keys():
             self.__dict__.update({lk:locs[lk]})
         
-        tvec = np.linspace(0*un.s, duration, t_res)
-        freqs = np.zeros(t_res)*un.MHz
-        dists = np.zeros(t_res) * un.cm
+        tvec =  np.arange(0,duration.to('s').value + 1, t_res.to('s').value) * un.s
+        freqs = np.zeros(len(tvec))*un.MHz
+        dists = np.zeros(len(tvec)) * un.cm
         if propagation == 'radial' or 'spiral':
             for i, t in enumerate(tvec):
                 dist = t * self.vb + self.starting_height
@@ -161,17 +176,20 @@ class Type_II_Burst:
         
         subband_extents = [[nuvec[0], nuvec[1]]]
         i = 1
-        while i < len(nuvec) - 1:
-            subband_extents.append([nuvec[i], nuvec[i] + 1])
+        while i < len(nuvec)-1:
+            subband_extents.append([nuvec[i], nuvec[i + 1]])
             i += 1
         sb = np.array(subband_extents)
         
         dist_vec = self.starting_height + self.vb * tvec
         width_vec = self.starting_width + self.width_growth_factor * (self.starting_width * (dist_vec/dist_vec[0] -1))
-        dyn_spec = np.zeros((len(tvec), len(nuvec)))*np.nan
+        dyn_spec = np.zeros((len(tvec), len(sb)))#*np.nan
         
         velocities = self.corona.velocity_profile
         v_A = self.corona.alfven_speed
+        v_tot = velocities + v_A
+        numins = []
+        numaxs = []
         for i, t in enumerate(tvec):
             d = dist_vec[i]
             w = width_vec[i]
@@ -180,6 +198,11 @@ class Type_II_Burst:
             
             dens_min, d_max_idx = self.corona.get_density(d_max, return_idxs=True)
             dens_max, d_min_idx = self.corona.get_density(d_min, return_idxs=True)
+            
+            try:
+                d_max_idx = int(d_max_idx)
+            except:
+                d_max_idx = -1
             
             freq_min = density_to_frequency(dens_min).to('MHz').value
             freq_max = density_to_frequency(dens_max).to('MHz').value
@@ -200,12 +223,13 @@ class Type_II_Burst:
                 if sb_idx1 == sb_idx0:
                     dyn_spec[i,sb_idx0] = -1
                 else:
-                    dyn_spec[i,sb_idx0:sb_idx1] = -1
-                    
+                    dyn_spec[i,sb_idx0:sb_idx1+1] = -1
+                
             if freq_max >= nu_max and freq_min <= nu_min:
                 dyn_spec[i,0:-1] = -1
-
-            super_sonic_idxs = np.where((velocities+v_A)[d_min_idx:d_max_idx] < self.vb)[0]
+            numins.append(freq_min)
+            numaxs.append(freq_max)
+            super_sonic_idxs = np.where((v_tot)[d_min_idx:d_max_idx] < self.vb)[0]
             if len(super_sonic_idxs) != 0:
                 dist_subset = self.corona.r_vec[d_min_idx:d_max_idx][super_sonic_idxs] - self.corona.star.R_star
   
@@ -235,21 +259,17 @@ class Type_II_Burst:
                         
                 if freq_max >= nu_max and freq_min <= nu_min:
                     dyn_spec[i,0:-1] = 1
-        
+                    
+        self.min_freqs = np.array(numins) * un.MHz
+        self.max_freqs = np.array(numaxs) * un.MHz        
         self.dyn_spec = dyn_spec.transpose()
         self.extents = [0, duration.to('min').value, nu_min, nu_max]
+        self.tvec = tvec
+        self.nuvec = nuvec
+        self.subbands = sb
         return
     
-    
-    def plot_dyn_spec(self, interpolation='nearest', cmap='magma'):
+    def plot_dyn_spec(self, cmap='magma', interpolation='nearest'):
         assert('dyn_spec' in self.__dict__.keys()), "No dyn spec has been made to plot"
-        
-        fig, ax = plt.subplots()
-        ax.imshow(self.dyn_spec, aspect='auto', origin='lower', extent=self.extents, interpolation=interpolation, cmap=cmap)
-        ax.tick_params(axis = 'both', which='both', labelsize=15)
-        ax.set_ylim(self.extents[2], self.extents[3])
-        ax.set_xlim(self.extents[0], self.extents[1])
-        ax.set_ylabel("Frequency [MHz]", fontsize = 18, multialignment='center')
-        ax.set_xlabel("Time since flare onset [min]", fontsize = 18)
-        fig.tight_layout()
-        return fig, ax
+        super().plot_dyn_spec(cmap=cmap, interpolation=interpolation)
+        return
