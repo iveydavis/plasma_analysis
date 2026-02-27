@@ -131,11 +131,17 @@ class Corona:
         self.alfven_speed = (self.mag_field_profile/np.sqrt(4 * np.pi * self.mass_density_profile)).to('km/s')
         
         
-    def get_density(self, dist_from_surface, return_idxs=False):
+    def get_density(self, dist_from_surface, return_idxs=False, predict=True):
         r = self.r_vec - self.star.R_star
-        if dist_from_surface > self.r_vec[-1]:
-            densities = np.nan /un.cm**3
+        if dist_from_surface > r[-1]:
             idx = []
+            if not predict:
+                densities = np.nan /un.cm**3    
+            elif predict:
+                dens0 = self.number_density_profile[-1]
+                d0 = r[-1]
+                densities = (dens0 * (d0/dist_from_surface)**2).cgs
+                
         else:
             diff = np.abs(r - dist_from_surface)
             idx = np.where(diff == np.nanmin(diff))[0][0]
@@ -146,6 +152,36 @@ class Corona:
         elif return_idxs:
             return np.nanmean(densities), idx
 
+    def update_max_distance(self, new_max_dist):
+        dr = int((self.r_vec[1] - self.r_vec[0]).cgs.value)
+        new_r_vec = np.arange(self.r_vec[0].cgs.value, new_max_dist.cgs.value + dr, dr)*un.cm
+        
+        new_mag_prof = np.zeros(len(new_r_vec)) * self.mag_field_profile.unit
+        new_mass_prof = np.zeros(len(new_r_vec)) * self.mass_density_profile.unit
+        new_num_prof = np.zeros(len(new_r_vec)) * self.number_density_profile.unit
+        new_velocity_prof = np.zeros(len(new_r_vec)) * self.velocity_profile.unit
+        
+        new_mag_prof[:self.r_res] = self.mag_field_profile 
+        new_mass_prof[:self.r_res] = self.mass_density_profile
+        new_num_prof[:self.r_res] = self.number_density_profile
+        new_velocity_prof[:self.r_res] = self.velocity_profile
+        
+        d0 = self.r_vec[-1].cgs
+        new_mag_prof[self.r_res:] = new_mag_prof[self.r_res-1] * (d0/new_r_vec[self.r_res:])**2
+        new_mass_prof[self.r_res:] = new_mass_prof[self.r_res-1] * (d0/new_r_vec[self.r_res:])**2
+        new_num_prof[self.r_res:] = new_num_prof[self.r_res-1] * (d0/new_r_vec[self.r_res:])**2
+        new_velocity_prof[self.r_res:] = self.velocity_profile[-1]
+        new_alf_prof = (new_mag_prof/np.sqrt(4 * np.pi * new_mass_prof)).to('km/s')
+        
+        self.r_res = len(new_r_vec)
+        self.r_max = new_max_dist.cgs
+        self.r_vec = new_r_vec
+        self.mag_field_profile = new_mag_prof
+        self.velocity_profile = new_velocity_prof
+        self.alfven_speed = new_alf_prof
+        self.mass_density_profile = new_mass_prof
+        self.number_density_profile = new_num_prof
+        return
     
     def calc_debye_lengths(self):
         freqs = 9800 * un.Hz * 2 * np.pi * np.sqrt(self.number_density_profile.to('cm**-3').value)
