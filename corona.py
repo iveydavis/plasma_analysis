@@ -7,6 +7,8 @@ Created on Tue Feb 17 11:16:18 2026
 """
 from misc import un, const, np, plt, calc_thermal_electron_speed
 from default_vals.corona_vals import default_corona_vals
+from polytropic_solution import polytropic_wind
+import os
 
 class Corona:
     def __init__(self, process=False, **kwargs):
@@ -34,9 +36,44 @@ class Corona:
         if process:
             self.get_parker_solutions()
         return
+
     
+    def get_wind_solutions(self, sol_type: str, poly_idx=1.1):
+        assert(sol_type.lower() in ['parker', 'polytrope'])
+        return
     
-    def get_parker_solutions(self, starting_resolution = 5000, max_iter=500, prec=1e-3, find_open=True, alf_dist=None):
+    def _get_polytrope_solutions(self, starting_resolution, max_iter=500, prec=1e-3, find_open=True, alf_dist=None):
+        poly = polytropic_wind(R=self.star.R_star, M=self.star.M_star, B0=self.B0, n0=self.n0, mass_fraction = self.mass_fraction)
+        poly.r_vec = self.r_vec
+        poly.calc_sc()
+        poly.get_wind_prof()
+        poly.get_density_profile()
+        
+        velocities = poly.v_prof
+        density = poly.mass_density_profile
+        B_field = self.B0/((self.r_vec/self.star.R_star).to(''))**3
+        alf_speed = (B_field/np.sqrt(density * 4 * np.pi)).to('km/s')   
+        if find_open:
+            try:
+                if alf_dist is None:
+                    alf_idx = np.where(alf_speed < velocities)[0][0]
+                elif alf_dist is not None:
+                    alf_idx = np.where(self.r_vec > alf_dist)[0][0]
+                density[alf_idx:] = density[alf_idx] *  (self.r_vec[alf_idx]/self.r_vec[alf_idx:])**2
+                velocities[alf_idx:] = velocities[alf_idx]
+                B_field[alf_idx:] = B_field[alf_idx] *  (self.r_vec[alf_idx]/self.r_vec[alf_idx:])**2
+                self.alf_dist = self.r_vec[alf_idx]
+            except:
+                print("No Alfven radius found")
+                
+        self.mag_field_profile = B_field
+        self.mass_density_profile = density
+        self.number_density_profile = self.mass_density_profile/(const.m_p * self.mass_fraction)
+        self.velocity_profile = velocities
+        self.alfven_speed = (self.mag_field_profile/np.sqrt(4 * np.pi * self.mass_density_profile)).to('km/s')
+        return
+    
+    def _get_parker_solutions(self, starting_resolution = 5000, max_iter=500, prec=1e-3, find_open=True, alf_dist=None):
         velocities = np.zeros(len(self.r_vec)) * un.km/un.s
         
         for i,r in enumerate(self.r_vec):
@@ -224,3 +261,25 @@ class Corona:
             
             ax[i].set_ylabel(ylabel)
         ax[-1].set_xlabel(r"Distance [R$_\star$]")
+        
+    def save(self, outpath=None):
+        if outpath is None:
+            dens = f"{int(self.n0.cgs.value/1e9)}e9"
+            temp = f"{int(self.temp.cgs.value/1e6)}MK"
+            field = f"{int(self.B0.cgs.value)}G"
+            outpath = f"{os.getcwd()}/corona_n0{dens}_temp{temp}_field{field}.npz"
+        np.savez(outpath, self.__dict__)    
+        
+        return
+
+    
+def load(file):
+    dat = np.load(file, allow_pickle = True)
+    d = dat['arr_0'].flatten()[0]
+    if 'process' in d.keys():
+        d['process'] = False
+    elif 'process' not in d.keys():
+        d.update({'process':False})
+        
+    cor = Corona(d)
+    return cor
