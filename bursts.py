@@ -6,7 +6,7 @@ Created on Thu Feb 12 11:10:40 2026
 @author: idavis
 """
 
-from misc import un, density_to_frequency, np, plt, frequency_to_density
+from misc import un, const, density_to_frequency, np, plt, frequency_to_density, os
 from default_vals.burst_vals import default_ii_vals, default_iii_vals
 
 C_sun = 4.22e36 * un.Hz
@@ -34,6 +34,16 @@ class Burst:
         ax.set_xlabel("Time since flare onset [min]", fontsize = 18)
         fig.tight_layout()
         return
+    
+    def save(self, outpath, t):
+        if outpath is None:
+            if t == 'iii':
+                vb = f"{np.round((self.vb.cgs/const.c.cgs),2)}c"
+            elif t == 'ii':
+                vb = f"{int(self.vb.to('km/s')).value}"
+            outpath = f"{os.getcwd()}/type{t}_burst_vb_{vb}.npz"
+        np.savez(outpath, self.__dict__)
+        
 #####################################################################
     
     
@@ -43,6 +53,7 @@ class Type_III_Burst(Burst):
             if k not in list(kwargs.keys()):
                 kwargs.update({k:default_iii_vals[k]}) 
         super().__init__(corona = kwargs['corona'], vb = kwargs['vb'], starting_height_factor=kwargs['starting_height_factor'])
+        self._type = 'iii'
         return 
      
         
@@ -117,6 +128,10 @@ class Type_III_Burst(Burst):
         assert('dyn_spec' in self.__dict__.keys()), "No dyn spec has been made to plot"
         super().plot_dyn_spec(cmap=cmap, interpolation=interpolation)
         return
+    
+    def save(self, outpath=None):
+        super().save(outpath, t='iii')
+        return
 #####################################################################
 
 
@@ -130,6 +145,7 @@ class Type_II_Burst(Burst):
         super().__init__(corona = kwargs['corona'], vb = kwargs['vb'], starting_height_factor=kwargs['starting_height_factor'])
         self.starting_width = kwargs['starting_width_factor']  * self.corona.star.R_star
         self.width_growth_factor = kwargs['width_growth_factor']
+        self._type =  'ii'
         return
     
        
@@ -272,3 +288,18 @@ class Type_II_Burst(Burst):
         assert('dyn_spec' in self.__dict__.keys()), "No dyn spec has been made to plot"
         super().plot_dyn_spec(cmap=cmap, interpolation=interpolation)
         return
+    
+    def save(self, outpath=None):
+        super().save(outpath, t='ii')
+        return
+
+    
+def load(file):
+    dat = np.load(file, allow_pickle = True)
+    d = dat['arr_0'].flatten()[0]
+    assert('_type' in d.keys()), "Cannot tell what type of burst to load"        
+    if d['_type'] == 'iii':
+        burst = Type_III_Burst(d)
+    elif d['_type'] == 'ii':
+        burst = Type_II_Burst(d)
+    return burst

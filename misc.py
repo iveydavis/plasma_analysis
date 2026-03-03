@@ -8,6 +8,7 @@ Created on Tue Feb 17 11:23:12 2026
 from astropy import units as un, constants as const
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 e = const.e.gauss.value * un.cm**1.5 * un.g**0.5/un.s
 G = (un.erg/un.cm**3)**0.5

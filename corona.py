@@ -34,19 +34,25 @@ class Corona:
         self.rc = (const.G * self.star.M_star/2/self.c0**2).to('R_sun')
         self.vthermal = np.sqrt(2 *const.k_B * self.temp/(const.m_e * self.mass_fraction) )
         if process:
-            self.get_parker_solutions()
+            self.get_wind_solutions(sol_type='parker')
         return
 
     
-    def get_wind_solutions(self, sol_type: str, poly_idx=1.1):
-        assert(sol_type.lower() in ['parker', 'polytrope'])
+    def get_wind_solutions(self, sol_type: str, **kwargs):
+        st = sol_type.lower()
+        assert(sol_type in ['parker', 'polytrope'])
+        if st == 'parker':
+            self._get_parker_solutions(**kwargs)
+        elif st == 'polytrope':
+            self._get_polytrope_solutions(**kwargs)
         return
     
-    def _get_polytrope_solutions(self, starting_resolution, max_iter=500, prec=1e-3, find_open=True, alf_dist=None):
+    
+    def _get_polytrope_solutions(self, poly_idx=1.1, max_iter=500, prec=1e-3, find_open=True, alf_dist=None):
         poly = polytropic_wind(R=self.star.R_star, M=self.star.M_star, B0=self.B0, n0=self.n0, mass_fraction = self.mass_fraction)
         poly.r_vec = self.r_vec
         poly.calc_sc()
-        poly.get_wind_prof()
+        poly.calc_wind_prof()
         poly.get_density_profile()
         
         velocities = poly.v_prof
@@ -72,6 +78,7 @@ class Corona:
         self.velocity_profile = velocities
         self.alfven_speed = (self.mag_field_profile/np.sqrt(4 * np.pi * self.mass_density_profile)).to('km/s')
         return
+    
     
     def _get_parker_solutions(self, starting_resolution = 5000, max_iter=500, prec=1e-3, find_open=True, alf_dist=None):
         velocities = np.zeros(len(self.r_vec)) * un.km/un.s
