@@ -16,8 +16,9 @@ default_corona_vals = {
     "M_star":0.95*const.M_sun.cgs,
     "B0":1000*G,
     "r_res":300,
-    "mass_fraction":1,
-    "r_max":40*const.R_sun.cgs
+    "mean_mol_weight":1,
+    "r_max":40*const.R_sun.cgs,
+    "mass_fraction":1
     }
 
 default_polytrope_vals = { 
@@ -27,6 +28,7 @@ default_polytrope_vals = {
      "M":0.95*const.M_sun.cgs,
      "r_res":300,
      "r_max":30*const.R_sun.cgs,
-     "mass_fraction":1,
-     "poly_idx": 1.1
+     "mean_mol_weight":1,
+     "poly_idx": 1.1,
+     "mass_fraction":1
      }   

@@ -15,24 +15,30 @@ class Corona:
         for k in list(default_corona_vals.keys()):
             if k not in list(kwargs.keys()):
                 kwargs.update({k:default_corona_vals[k]})
+        for k in list(kwargs.keys()):
+            if k not in list(default_corona_vals.keys()):
+                raise Warning(f"{k} not recognized keyword argument")
         self.n0 = kwargs['n0']
         self.temp = kwargs['temp']
         self.star = kwargs['star']
         self.B0 = kwargs['B0']
+        self.mean_mol_weight = kwargs['mean_mol_weight']
         self.mass_fraction = kwargs['mass_fraction']
         self.r_res = kwargs['r_res']
         self.r_max = kwargs['r_max']
         
         self.r_vec = np.linspace(self.star.R_star + 0.0001*self.star.R_star, self.r_max, self.r_res)
-        self.wind_profile = np.zeros(len(self.r_vec))
+        self.velocity_profile = np.zeros(len(self.r_vec))
         self.dterms = np.zeros(len(self.r_vec))
         self.right_terms = np.zeros(len(self.r_vec))
         self.mass_density_profile = np.zeros(len(self.r_vec))
         self.number_density_profile = np.zeros(len(self.r_vec))
         
-        self.c0 = np.sqrt(const.k_B * self.temp/ (const.m_p * self.mass_fraction)).to('km/s')
+        self.c0 = np.sqrt(const.k_B * self.temp/ (const.m_p * self.mean_mol_weight)).to('km/s')
         self.rc = (const.G * self.star.M_star/2/self.c0**2).to('R_sun')
-        self.vthermal = np.sqrt(2 *const.k_B * self.temp/(const.m_e * self.mass_fraction) )
+        # if self.rc < self.star.R_star:
+        #     self.rc = self.star.R_star
+        self.vthermal = np.sqrt(2 *const.k_B * self.temp/(const.m_e) )
         if process:
             self.get_wind_solutions(sol_type='parker')
         return
@@ -40,19 +46,23 @@ class Corona:
     
     def get_wind_solutions(self, sol_type: str, **kwargs):
         st = sol_type.lower()
-        assert(sol_type in ['parker', 'polytrope'])
+        assert(st in ['parker', 'polytrope'])
         if st == 'parker':
             self._get_parker_solutions(**kwargs)
         elif st == 'polytrope':
             self._get_polytrope_solutions(**kwargs)
+            
         return
     
     
-    def _get_polytrope_solutions(self, poly_idx=1.1, max_iter=500, prec=1e-3, find_open=True, alf_dist=None):
-        poly = polytropic_wind(R=self.star.R_star, M=self.star.M_star, B0=self.B0, n0=self.n0, mass_fraction = self.mass_fraction)
+    def _get_polytrope_solutions(self, poly_idx=1.1, prec_vel=5*un.km/un.s, max_iter=50, prec=1e-3, find_open=True, alf_dist=None):
+        self.poly_idx = poly_idx
+        poly = polytropic_wind(R=self.star.R_star, M=self.star.M_star, n0=self.n0, mean_mol_weight=self.mean_mol_weight, mass_fraction=self.mass_fraction, T0=self.temp, poly_idx = poly_idx)
         poly.r_vec = self.r_vec
-        poly.calc_sc()
-        poly.calc_wind_prof()
+        poly.calc_sc(prec_thres=prec)
+        if poly.sc < (self.r_vec[0]/self.star.R_star).to(''):
+            poly.sc = (self.r_vec[0]/self.star.R_star).to('')
+        poly.calc_wind_prof(max_iter=max_iter, prec_vel=prec_vel)
         poly.get_density_profile()
         
         velocities = poly.v_prof
@@ -77,12 +87,15 @@ class Corona:
         self.number_density_profile = self.mass_density_profile/(const.m_p * self.mass_fraction)
         self.velocity_profile = velocities
         self.alfven_speed = (self.mag_field_profile/np.sqrt(4 * np.pi * self.mass_density_profile)).to('km/s')
+        self.temperature_profile = self.temp * (self.n0/self.number_density_profile)**(1-poly_idx)
         return
     
     
     def _get_parker_solutions(self, starting_resolution = 5000, max_iter=500, prec=1e-3, find_open=True, alf_dist=None):
+        self.poly_idx = 1
         velocities = np.zeros(len(self.r_vec)) * un.km/un.s
-        
+        self.dterms = np.zeros(len(self.r_vec))
+        self.right_terms = np.zeros(len(self.r_vec))
         for i,r in enumerate(self.r_vec):
             right_term = 4 * np.log(r/self.rc) + 4 * self.rc/r - 3
             
@@ -173,7 +186,8 @@ class Corona:
         self.number_density_profile = self.mass_density_profile/(const.m_p * self.mass_fraction)
         self.velocity_profile = velocities
         self.alfven_speed = (self.mag_field_profile/np.sqrt(4 * np.pi * self.mass_density_profile)).to('km/s')
-        
+        self.temperature_profile  = np.zeros(len(self.r_vec)) + self.temp
+        return
         
     def get_density(self, dist_from_surface, return_idxs=False, predict=True):
         r = self.r_vec - self.star.R_star
@@ -216,6 +230,7 @@ class Corona:
         new_num_prof[self.r_res:] = new_num_prof[self.r_res-1] * (d0/new_r_vec[self.r_res:])**2
         new_velocity_prof[self.r_res:] = self.velocity_profile[-1]
         new_alf_prof = (new_mag_prof/np.sqrt(4 * np.pi * new_mass_prof)).to('km/s')
+        new_temp_prof = self.temperature_profile[0] * (new_num_prof[0]/new_num_prof)**(1-self.poly_idx)
         
         self.r_res = len(new_r_vec)
         self.r_max = new_max_dist.cgs
@@ -225,6 +240,7 @@ class Corona:
         self.alfven_speed = new_alf_prof
         self.mass_density_profile = new_mass_prof
         self.number_density_profile = new_num_prof
+        self.temperature_profile = new_temp_prof
         return
     
     def calc_debye_lengths(self):

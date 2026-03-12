@@ -8,8 +8,6 @@ Created on Fri Feb 27 14:57:02 2026
 
 from misc import un, const, np, plt
 from default_vals.corona_vals import default_polytrope_vals 
-# https://arxiv.org/pdf/2209.03508
-
 
 class polytropic_wind:
     def __init__(self, **kwargs):
@@ -21,6 +19,7 @@ class polytropic_wind:
         self.R = kwargs['R']
         self.T0 = kwargs['T0']
         self.n0 = kwargs['n0']
+        self.mean_mol_weight = kwargs['mean_mol_weight']
         self.mass_fraction = kwargs['mass_fraction']
         self.rho0 = self.n0 * const.m_p * self.mass_fraction
         self.poly_idx = kwargs['poly_idx']
@@ -36,7 +35,7 @@ class polytropic_wind:
     
     
     def calc_c0(self):
-        self.C0 = ((self.poly_idx * const.k_B * self.T0/const.m_p).cgs)**0.5
+        self.C0 = ((self.poly_idx * const.k_B * self.T0/(const.m_p*self.mean_mol_weight)).cgs)**0.5
         return
 
 
@@ -95,6 +94,8 @@ class polytropic_wind:
     
     def calc_vc(self):
         self.vc = (self.Cg**2/self.sc)**0.5
+        return
+    
     
     def calc_wind_prof(self, prec_thres=1e-3, prec_vel=10*un.km/un.s, max_iter=50):
         if 'sc' not in self.__dict__.keys():
@@ -137,7 +138,7 @@ class polytropic_wind:
                 diff[inf_idxs] = np.nan
                 
                 if np.nanmin(np.abs(diff)) >= 0.1*diff0:                    
-                    vmax += 2*prec_vel.to('km/s').value
+                    vmax += prec_vel.to('km/s').value
                     diff0 = np.nanmin(np.abs(diff))
                     length += 100
                 else:
@@ -145,15 +146,20 @@ class polytropic_wind:
                 niter += 1
 
             idx = np.where(np.abs(diff) == np.nanmin(np.abs(diff)))[0]
+            if len(idx) > 1:
+                vv = v_vec[idx]
+                diffv = np.abs(v_vec - self.v_prof[i-1])
+                idx = np.where(diffv == np.nanmin(diffv))[0][0]
             
             self.v_prof[i] = v_vec[idx]
             dv = (self.v_prof[i] - self.v_prof[i-1]).to('km/s').value
-            if dv == 0:
+            if dv == 0 or dv > prec_vel.to('km/s').value:
                 dv = prec_vel.to('km/s').value
-            vmax = self.v_prof[i].to('km/s').value + 1.05*dv
+            vmax = self.v_prof[i].to('km/s').value + 0.1*dv
             vmin = self.v_prof[i].to('km/s').value
             
         return
+    
     
     def get_density_profile(self):
         if 'v_prof' not in self.__dict__.keys():
@@ -164,3 +170,15 @@ class polytropic_wind:
         self.mass_density_profile = n * const.m_p * self.mass_fraction
 
 
+    def get_temperature_profile(self):
+        self.T = self.T0 * (self.n0/self.number_density_profile)**(1-self.poly_idx)
+        return
+    
+    def plot(self, prop = 'velocity'):
+        props = ['velocity', 'density', 'temperature']
+        if type(prop) == str:
+            prop = [prop]
+        for p in prop:
+            assert(p in props)
+        fig, axs = plt.subplots()
+        return
