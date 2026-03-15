@@ -1,31 +1,35 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Feb 17 11:16:18 2026
 
-@author: idavis
-"""
-from misc import un, const, np, plt, calc_thermal_electron_speed
+from misc import un, const, np, plt, calc_thermal_electron_speed, check_units
 from default_vals.corona_vals import default_corona_vals
-from polytropic_solution import polytropic_wind
+from polytropic_solution import Polytropic_Wind
 import os
 
 class Corona:
     def __init__(self, process=False, **kwargs):
+        """
+        Class for solving for winds and estimating coronal properties
+        :Keyword arguments:
+            ** star: Star class instance with properties of the star to model the corona for
+            ** temp: base coronal temperature, assumed in units Kelvin if not defined
+            ** n0: base coronal number density, assumed in units per cubic cm if not defined
+            ** r_res (int): number of of elements in the spatial array
+            ** r_max: maximum physical distance in the spatial array, assumed in units of R_sun if not defined
+            ** mean_mol_weight: mean molecular weight of gas, default is 0.6
+            ** mass_fraction: isotopic mass fraction of the gas, default is 1 (hydrogen)
+        """
         for k in list(default_corona_vals.keys()):
             if k not in list(kwargs.keys()):
                 kwargs.update({k:default_corona_vals[k]})
         for k in list(kwargs.keys()):
             if k not in list(default_corona_vals.keys()):
                 raise Warning(f"{k} not recognized keyword argument")
-        self.n0 = kwargs['n0']
-        self.temp = kwargs['temp']
-        self.star = kwargs['star']
-        self.B0 = kwargs['B0']
-        self.mean_mol_weight = kwargs['mean_mol_weight']
-        self.mass_fraction = kwargs['mass_fraction']
-        self.r_res = kwargs['r_res']
-        self.r_max = kwargs['r_max']
+                
+        for k in kwargs:
+            self.__dict__.update({k:kwargs[k]})
+        
+        check_units(kwargs, default_corona_vals)
         
         self.r_vec = np.linspace(self.star.R_star + 0.0001*self.star.R_star, self.r_max, self.r_res)
         self.velocity_profile = np.zeros(len(self.r_vec))
@@ -36,8 +40,6 @@ class Corona:
         
         self.c0 = np.sqrt(const.k_B * self.temp/ (const.m_p * self.mean_mol_weight)).to('km/s')
         self.rc = (const.G * self.star.M_star/2/self.c0**2).to('R_sun')
-        # if self.rc < self.star.R_star:
-        #     self.rc = self.star.R_star
         self.vthermal = np.sqrt(2 *const.k_B * self.temp/(const.m_e) )
         if process:
             self.get_wind_solutions(sol_type='parker')
@@ -45,6 +47,18 @@ class Corona:
 
     
     def get_wind_solutions(self, sol_type: str, **kwargs):
+        """
+        Calculate the wind solutions for either isothermal (sol_type='parker') or 
+        polytropic wind (sol_type='polytrope'). Updates the velocity_profile,
+        mass_density_profile, number_density_profile, alfven_speed, mag_field_profile,
+        and temperature_profile properties.
+        :param sol_type: The type of wind solution to calculate, either 'parker'
+        or 'polytrope'
+        :type sol_type: str
+        :param **kwargs: parameters for the relevant wind solution method, see
+        _get_polytrope_solution() and _get_parker_solutions()
+
+        """
         st = sol_type.lower()
         assert(st in ['parker', 'polytrope'])
         if st == 'parker':
@@ -55,9 +69,25 @@ class Corona:
         return
     
     
-    def _get_polytrope_solutions(self, poly_idx=1.1, prec_vel=5*un.km/un.s, max_iter=50, prec=1e-3, find_open=True, alf_dist=None):
+    def _get_polytrope_solutions(self, poly_idx=1.1, prec_vel=5*un.km/un.s, max_iter=50, prec=1e-3, find_open:bool=True, alf_dist=None):
+        """
+        Gets the solutions for a polytropic wind from the polytropic_solution.Polytropic_Wind class
+        :param poly_idx: Polytropic index, defaults to 1.1
+        :type poly_idx: float, optional
+        :param prec_vel: precision threshold for velocity difference between left and right side of the velocity equation, defaults to 5*un.km/un.s
+        :type prec_vel: un.quantity.Quantity, optional
+        :param max_iter: Number of times to increase resolution to solve within velocity precision, defaults to 50
+        :type max_iter: int, optional
+        :param prec: Precision threshold for the difference between the left and right hand sides of the equation for calculating sc, defaults to 1e-3
+        :type prec: float, int, optional
+        :param find_open: Describes whether to try to calculate the Alfven/open-field distance, defaults to True
+        :type find_open: bool, optional
+        :param alf_dist: A value to force the Alfven/open-field distance to be, defaults to None
+        :type alf_dist: un.quantity.Quantity, optional
+        """
+        
         self.poly_idx = poly_idx
-        poly = polytropic_wind(R=self.star.R_star, M=self.star.M_star, n0=self.n0, mean_mol_weight=self.mean_mol_weight, mass_fraction=self.mass_fraction, T0=self.temp, poly_idx = poly_idx)
+        poly = Polytropic_Wind(R_star=self.star.R_star, M_star=self.star.M_star, n0=self.n0, mean_mol_weight=self.mean_mol_weight, mass_fraction=self.mass_fraction, T0=self.temp, poly_idx = poly_idx)
         poly.r_vec = self.r_vec
         poly.calc_sc(prec_thres=prec)
         if poly.sc < (self.r_vec[0]/self.star.R_star).to(''):
@@ -91,7 +121,21 @@ class Corona:
         return
     
     
-    def _get_parker_solutions(self, starting_resolution = 5000, max_iter=500, prec=1e-3, find_open=True, alf_dist=None):
+    def _get_parker_solutions(self, starting_resolution:int=5000, max_iter:int=500, prec=1e-3, find_open:bool=True, alf_dist=None):
+        """
+        Gets the solution for an isothermal/Parker wind
+        :param starting_resolution: starting velocity-space resolution to search for solution at given distance, defaults to 5000
+        :type starting_resolution: int, optional
+        :param max_iter: Maximum number of iterations to try increasing resolution to reach precision, defaults to 500
+        :type max_iter: int, optional
+        :param prec: precision of difference between left and right hand side of the equation, defaults to 1e-3
+        :type prec: int, float, optional
+        :param find_open: Describes whether to try to calculate the Alfven/open-field distance,, defaults to True
+        :type find_open: bool, optional
+        :param alf_dist: A value to force the Alfven/open-field distance to be, defaults to None
+        :type alf_dist: un.quantity.Quantity, optional
+        """
+        
         self.poly_idx = 1
         velocities = np.zeros(len(self.r_vec)) * un.km/un.s
         self.dterms = np.zeros(len(self.r_vec))
@@ -189,7 +233,21 @@ class Corona:
         self.temperature_profile  = np.zeros(len(self.r_vec)) + self.temp
         return
         
-    def get_density(self, dist_from_surface, return_idxs=False, predict=True):
+    def get_density(self, dist_from_surface, return_idxs:bool=False, predict:bool=True):
+        """
+        Returns the number density based on a distance from the stellar surface provided
+        :param dist_from_surface: The distance from surface to retrieve the number density from
+        :type dist_from_surface: un.quantity.Quantity
+        :param return_idxs: describes whether to return the index of the vector that the density was retrieved from, defaults to False
+        :type return_idxs: bool, optional
+        :param predict: If the distance is further than the profiles have been
+        calculated for, then prediction will try to estimat the density assuming
+        the field is opened. Otherwise, it returns NaN, defaults to True
+        :type predict: bool, optional
+        :return: density, (idx)
+        :rtype: un.quantity.Quantity, (int)
+        """
+        
         r = self.r_vec - self.star.R_star
         if dist_from_surface > r[-1]:
             idx = []
@@ -210,7 +268,18 @@ class Corona:
         elif return_idxs:
             return np.nanmean(densities), idx
 
+
     def update_max_distance(self, new_max_dist):
+        """
+        Increases the maximum distance that the coronal properties
+        are calculated for assuming that the last quantity was in the open-field
+        regime. Maintains the same spatial resolution as the original r_vec property
+        :param new_max_dist: The new maximum distance to extend the wind properties 
+        out to
+        :type new_max_dist: un.quantity.Quantity
+        """
+        assert(new_max_dist > self.r_vec[-1]), "New maximum distance should be further than the original maximum distance"
+        
         dr = int((self.r_vec[1] - self.r_vec[0]).cgs.value)
         new_r_vec = np.arange(self.r_vec[0].cgs.value, new_max_dist.cgs.value + dr, dr)*un.cm
         
@@ -244,13 +313,25 @@ class Corona:
         return
     
     def calc_debye_lengths(self):
+        """
+        Calculates debye lengths as function of distance. Updates debye_lengths property
+        """
+        
         freqs = 9800 * un.Hz * 2 * np.pi * np.sqrt(self.number_density_profile.to('cm**-3').value)
-        vTe = calc_thermal_electron_speed(self.temp)
+        vTe = calc_thermal_electron_speed(self.temperature_profile)
         self.debye_lengths = (vTe/freqs).to('cm')
         return
     
     
     def plot(self, prop='velocity'):
+        """
+        Plots a given property as function of distance
+        :param prop: Property or properties to be plotted, defaults to 'velocity'
+        :type prop: str or list of str
+        :return: figure and axis objects
+        :rtype: Figure, AxesSubplot or array of AxesSubplot 
+        """
+        
         properties = ['velocity', 'mass_density', 'number_density', 'magnetic_field', 'alfven_speed']
         if type(prop) != list:
             prop = [prop]
@@ -284,8 +365,14 @@ class Corona:
             
             ax[i].set_ylabel(ylabel)
         ax[-1].set_xlabel(r"Distance [R$_\star$]")
+        return fig, ax
         
-    def save(self, outpath=None):
+    def save(self, outpath:str=None):
+        """
+        Saves the wind solution
+        :param outpath: name of the path and file name to save data to, defaults to None
+        :type outpath: str, optional
+        """
         if outpath is None:
             dens = f"{int(self.n0.cgs.value/1e9)}e9"
             temp = f"{int(self.temp.cgs.value/1e6)}MK"
@@ -296,7 +383,15 @@ class Corona:
         return
 
     
-def load(file):
+def load(file:str):
+    """
+    Loads corona file
+    :param file: pathname of the file
+    :type file: str
+    :return: the corona data
+    :rtype: Corona
+
+    """
     dat = np.load(file, allow_pickle = True)
     d = dat['arr_0'].flatten()[0]
     if 'process' in d.keys():
