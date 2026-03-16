@@ -1,214 +1,47 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from misc import un, const, np, plt, calc_thermal_electron_speed, check_units
-from default_vals.corona_vals import default_corona_vals
-from polytropic_solution import Polytropic_Wind
+from misc import un, const, np, plt, calc_thermal_electron_speed
 import os
 
 class Corona:
     def __init__(self, process=False, **kwargs):
-        """
-        Class for solving for winds and estimating coronal properties
-        :Keyword arguments:
-            ** star: Star class instance with properties of the star to model the corona for
-            ** temp: base coronal temperature, assumed in units Kelvin if not defined
-            ** n0: base coronal number density, assumed in units per cubic cm if not defined
-            ** r_res (int): number of of elements in the spatial array
-            ** r_max: maximum physical distance in the spatial array, assumed in units of R_sun if not defined
-            ** mean_mol_weight: mean molecular weight of gas, default is 0.6
-            ** mass_fraction: isotopic mass fraction of the gas, default is 1 (hydrogen)
-        """
-        for k in list(default_corona_vals.keys()):
-            if k not in list(kwargs.keys()):
-                kwargs.update({k:default_corona_vals[k]})
-        for k in list(kwargs.keys()):
-            if k not in list(default_corona_vals.keys()):
-                raise Warning(f"{k} not recognized keyword argument")
-                
-        for k in kwargs:
-            self.__dict__.update({k:kwargs[k]})
-        
-        check_units(kwargs, default_corona_vals)
-        
         self.r_vec = np.linspace(self.star.R_star + 0.0001*self.star.R_star, self.r_max, self.r_res)
         self.velocity_profile = np.zeros(len(self.r_vec))
-        self.dterms = np.zeros(len(self.r_vec))
-        self.right_terms = np.zeros(len(self.r_vec))
+        
         self.mass_density_profile = np.zeros(len(self.r_vec))
         self.number_density_profile = np.zeros(len(self.r_vec))
-        
-        self.c0 = np.sqrt(const.k_B * self.temp/ (const.m_p * self.mean_mol_weight)).to('km/s')
-        self.rc = (const.G * self.star.M_star/2/self.c0**2).to('R_sun')
-        self.vthermal = np.sqrt(2 *const.k_B * self.temp/(const.m_e) )
-        if process:
-            self.get_wind_solutions(sol_type='parker')
+        self.temperature_profile = np.zeros(len(self.r_vec))
+        self.c0 = self.calc_c0()
         return
-
     
-    def get_wind_solutions(self, sol_type: str, **kwargs):
+    def calc_c0(self):
         """
-        Calculate the wind solutions for either isothermal (sol_type='parker') or 
-        polytropic wind (sol_type='polytrope'). Updates the velocity_profile,
-        mass_density_profile, number_density_profile, alfven_speed, mag_field_profile,
-        and temperature_profile properties.
-        :param sol_type: The type of wind solution to calculate, either 'parker'
-        or 'polytrope'
-        :type sol_type: str
-        :param **kwargs: parameters for the relevant wind solution method, see
-        _get_polytrope_solution() and _get_parker_solutions()
-
+        Calculates the base isothermal speed and updates the c0 property
         """
-        st = sol_type.lower()
-        assert(st in ['parker', 'polytrope'])
-        if st == 'parker':
-            self._get_parker_solutions(**kwargs)
-        elif st == 'polytrope':
-            self._get_polytrope_solutions(**kwargs)
-            
         return
     
     
-    def _get_polytrope_solutions(self, poly_idx=1.1, prec_vel=5*un.km/un.s, max_iter=50, prec=1e-3, find_open:bool=True, alf_dist=None):
+    def calc_wind_solution(self):
         """
-        Gets the solutions for a polytropic wind from the polytropic_solution.Polytropic_Wind class
-        :param poly_idx: Polytropic index, defaults to 1.1
-        :type poly_idx: float, optional
-        :param prec_vel: precision threshold for velocity difference between left and right side of the velocity equation, defaults to 5*un.km/un.s
-        :type prec_vel: un.quantity.Quantity, optional
-        :param max_iter: Number of times to increase resolution to solve within velocity precision, defaults to 50
-        :type max_iter: int, optional
-        :param prec: Precision threshold for the difference between the left and right hand sides of the equation for calculating sc, defaults to 1e-3
-        :type prec: float, int, optional
-        :param find_open: Describes whether to try to calculate the Alfven/open-field distance, defaults to True
-        :type find_open: bool, optional
-        :param alf_dist: A value to force the Alfven/open-field distance to be, defaults to None
-        :type alf_dist: un.quantity.Quantity, optional
+        Calculates the wind speed profile and then also determines the density, temperature, and magnetic
+        field profiles
         """
-        
-        self.poly_idx = poly_idx
-        poly = Polytropic_Wind(R_star=self.star.R_star, M_star=self.star.M_star, n0=self.n0, mean_mol_weight=self.mean_mol_weight, mass_fraction=self.mass_fraction, T0=self.temp, poly_idx = poly_idx)
-        poly.r_vec = self.r_vec
-        poly.calc_sc(prec_thres=prec)
-        if poly.sc < (self.r_vec[0]/self.star.R_star).to(''):
-            poly.sc = (self.r_vec[0]/self.star.R_star).to('')
-        poly.calc_wind_prof(max_iter=max_iter, prec_vel=prec_vel)
-        poly.get_density_profile()
-        
-        velocities = poly.v_prof
-        density = poly.mass_density_profile
-        B_field = self.B0/((self.r_vec/self.star.R_star).to(''))**3
-        alf_speed = (B_field/np.sqrt(density * 4 * np.pi)).to('km/s')   
-        if find_open:
-            try:
-                if alf_dist is None:
-                    alf_idx = np.where(alf_speed < velocities)[0][0]
-                elif alf_dist is not None:
-                    alf_idx = np.where(self.r_vec > alf_dist)[0][0]
-                density[alf_idx:] = density[alf_idx] *  (self.r_vec[alf_idx]/self.r_vec[alf_idx:])**2
-                velocities[alf_idx:] = velocities[alf_idx]
-                B_field[alf_idx:] = B_field[alf_idx] *  (self.r_vec[alf_idx]/self.r_vec[alf_idx:])**2
-                self.alf_dist = self.r_vec[alf_idx]
-            except:
-                print("No Alfven radius found")
-                
-        self.mag_field_profile = B_field
-        self.mass_density_profile = density
-        self.number_density_profile = self.mass_density_profile/(const.m_p * self.mass_fraction)
-        self.velocity_profile = velocities
-        self.alfven_speed = (self.mag_field_profile/np.sqrt(4 * np.pi * self.mass_density_profile)).to('km/s')
-        self.temperature_profile = self.temp * (self.n0/self.number_density_profile)**(1-poly_idx)
         return
     
-    
-    def _get_parker_solutions(self, starting_resolution:int=5000, max_iter:int=500, prec=1e-3, find_open:bool=True, alf_dist=None):
+    def _get_other_wind_properties(self, velocities, find_open=True, alf_dist=None):
         """
-        Gets the solution for an isothermal/Parker wind
-        :param starting_resolution: starting velocity-space resolution to search for solution at given distance, defaults to 5000
-        :type starting_resolution: int, optional
-        :param max_iter: Maximum number of iterations to try increasing resolution to reach precision, defaults to 500
-        :type max_iter: int, optional
-        :param prec: precision of difference between left and right hand side of the equation, defaults to 1e-3
-        :type prec: int, float, optional
+        Calculates the properties of the wind besides the velocity, and updates
+        the velocity profile based on the opened field condition
+        :param velocities: velocity profile that informs the solutions
+        :type velocities: ndarray of un.quantity.Quantity
+        :param find_open: , defaults to True
         :param find_open: Describes whether to try to calculate the Alfven/open-field distance,, defaults to True
         :type find_open: bool, optional
         :param alf_dist: A value to force the Alfven/open-field distance to be, defaults to None
         :type alf_dist: un.quantity.Quantity, optional
+
         """
-        
-        self.poly_idx = 1
-        velocities = np.zeros(len(self.r_vec)) * un.km/un.s
-        self.dterms = np.zeros(len(self.r_vec))
-        self.right_terms = np.zeros(len(self.r_vec))
-        for i,r in enumerate(self.r_vec):
-            right_term = 4 * np.log(r/self.rc) + 4 * self.rc/r - 3
-            
-            if i == 0 or np.isnan(velocities[i-1]):
-                v_vec = np.linspace(0, self.c0.to('km/s').value, 5000) * un.km/un.s
-            else:
-                v_vec = np.linspace(velocities[i-1].to("km/s").value, velocities[i-1].to('km/s').value + 100,5000) * un.km/un.s
-                
-            left_term = (v_vec/self.c0)**2 - np.log(v_vec**2/self.c0**2)    
-            
-            count = 0
-            res = starting_resolution
-            while np.nanmax(left_term) < right_term or np.nanmin(left_term) > right_term: 
-                v_vec = np.linspace(v_vec[0].to("km/s").value, v_vec[-1].to("km/s").value + 1, starting_resolution) * un.km/un.s
-                if v_vec[0] <= 0:
-                    v_vec[0] = 0
-                left_term = (v_vec/self.c0)**2 - np.log(v_vec**2/self.c0**2)
-            
-            while np.nanmin(np.abs(left_term - right_term)) > prec and count <= max_iter:
-                res += 1000
-                if i == 0:
-                    vmin = v_vec[0].to('km/s').value
-                elif i != 0:
-                    vmin = velocities[i-1].to('km/s').value
-                    
-                v_vec = np.linspace(vmin, v_vec[-1].to("km/s").value + 1, res) * un.km/un.s    
-                left_term = (v_vec/self.c0)**2 - np.log(v_vec**2/self.c0**2)
-                count += 1
-                
-            self.right_terms[i] = right_term
-            dterm = np.abs(right_term - left_term)
-            
-            diff_idxs = np.where(dterm <= 5*prec)[0]
-            if len(diff_idxs) > 1:
-                vels = v_vec[diff_idxs]
-                if i == 0:
-                    min_idx = diff_idxs[0]
-                elif i != 0:
-                    vdiff = vels - velocities[-1]
-                    bad_idxs = np.where(vdiff < 0)[0]
-                    vdiff[bad_idxs] = np.nan
-                    diff_idx = np.where(vdiff >= 0)[0]
-                    min_idx = diff_idxs[diff_idx[0]]
-                    
-                v = v_vec[min_idx]
-            elif len(diff_idxs) == 1:
-                min_idx = diff_idxs
-                v = v_vec[min_idx]
-            elif len(diff_idxs) == 0:
-                min_idx = np.nanmin(dterm)
-                v = np.nan * un.km/un.s
-                
-            self.dterms[i] = dterm[min_idx]
-            velocities[i] = v
-        
-        diff = velocities - np.roll(velocities, 1)
-        failed_idx = np.where(diff == 0)[0]
-        if len(failed_idx) > 0:
-            buff = int(self.r_res/1000) + 2
-            i0 = failed_idx[0] - buff
-            ie = failed_idx[-1] + buff
-            if i0 < 1:
-                i0 = 1
-            
-            dx = ie  - i0 
-            dy = velocities[ie] - velocities[i0]
-            slope = dy/dx
-            velocities[i0:ie] = slope * np.linspace(1, dx, dx) + velocities[i0-1]
-            
         density = self.n0 * self.mass_fraction*const.m_p*(self.r_vec[0]/self.r_vec)**2 * (velocities[0]/velocities)
         B_field = self.B0/((self.r_vec/self.star.R_star).to(''))**3
         alf_speed = (B_field/np.sqrt(density * 4 * np.pi)).to('km/s')   
@@ -230,45 +63,8 @@ class Corona:
         self.number_density_profile = self.mass_density_profile/(const.m_p * self.mass_fraction)
         self.velocity_profile = velocities
         self.alfven_speed = (self.mag_field_profile/np.sqrt(4 * np.pi * self.mass_density_profile)).to('km/s')
-        self.temperature_profile  = np.zeros(len(self.r_vec)) + self.temp
         return
-        
-    def get_density(self, dist_from_surface, return_idxs:bool=False, predict:bool=True):
-        """
-        Returns the number density based on a distance from the stellar surface provided
-        :param dist_from_surface: The distance from surface to retrieve the number density from
-        :type dist_from_surface: un.quantity.Quantity
-        :param return_idxs: describes whether to return the index of the vector that the density was retrieved from, defaults to False
-        :type return_idxs: bool, optional
-        :param predict: If the distance is further than the profiles have been
-        calculated for, then prediction will try to estimat the density assuming
-        the field is opened. Otherwise, it returns NaN, defaults to True
-        :type predict: bool, optional
-        :return: density, (idx)
-        :rtype: un.quantity.Quantity, (int)
-        """
-        
-        r = self.r_vec - self.star.R_star
-        if dist_from_surface > r[-1]:
-            idx = []
-            if not predict:
-                densities = np.nan /un.cm**3    
-            elif predict:
-                dens0 = self.number_density_profile[-1]
-                d0 = r[-1]
-                densities = (dens0 * (d0/dist_from_surface)**2).cgs
-                
-        else:
-            diff = np.abs(r - dist_from_surface)
-            idx = np.where(diff == np.nanmin(diff))[0][0]
-            densities = self.number_density_profile[idx]
-
-        if not return_idxs:
-            return np.nanmean(densities)
-        elif return_idxs:
-            return np.nanmean(densities), idx
-
-
+    
     def update_max_distance(self, new_max_dist):
         """
         Increases the maximum distance that the coronal properties
@@ -312,6 +108,43 @@ class Corona:
         self.temperature_profile = new_temp_prof
         return
     
+    
+    def get_density(self, dist_from_surface, return_idxs:bool=False, predict:bool=True):
+        """
+        Returns the number density based on a distance from the stellar surface provided
+        :param dist_from_surface: The distance from surface to retrieve the number density from
+        :type dist_from_surface: un.quantity.Quantity
+        :param return_idxs: describes whether to return the index of the vector that the density was retrieved from, defaults to False
+        :type return_idxs: bool, optional
+        :param predict: If the distance is further than the profiles have been
+        calculated for, then prediction will try to estimat the density assuming
+        the field is opened. Otherwise, it returns NaN, defaults to True
+        :type predict: bool, optional
+        :return: density, (idx)
+        :rtype: un.quantity.Quantity, (int)
+        """
+        
+        r = self.r_vec - self.star.R_star
+        if dist_from_surface > r[-1]:
+            idx = []
+            if not predict:
+                densities = np.nan /un.cm**3    
+            elif predict:
+                dens0 = self.number_density_profile[-1]
+                d0 = r[-1]
+                densities = (dens0 * (d0/dist_from_surface)**2).cgs
+                
+        else:
+            diff = np.abs(r - dist_from_surface)
+            idx = np.where(diff == np.nanmin(diff))[0][0]
+            densities = self.number_density_profile[idx]
+
+        if not return_idxs:
+            return np.nanmean(densities)
+        elif return_idxs:
+            return np.nanmean(densities), idx
+        
+    
     def calc_debye_lengths(self):
         """
         Calculates debye lengths as function of distance. Updates debye_lengths property
@@ -331,8 +164,8 @@ class Corona:
         :return: figure and axis objects
         :rtype: Figure, AxesSubplot or array of AxesSubplot 
         """
-        
-        properties = ['velocity', 'mass_density', 'number_density', 'magnetic_field', 'alfven_speed']
+
+        properties = ['velocity', 'mass_density', 'number_density', 'magnetic_field', 'alfven_speed', 'temperature']
         if type(prop) != list:
             prop = [prop]
                 
@@ -360,13 +193,17 @@ class Corona:
             elif p.lower() == 'alfven_speed':
                 dat = self.alfven_speed
                 ylabel = 'Alfven velocity [km/s]'
+            elif p.lower() == 'temperature':
+                dat = self.temperature_profile
+                ylabel = 'Temperature [K]'
                 
             ax[i].semilogy((self.r_vec/self.star.R_star).to(''), dat)
             
             ax[i].set_ylabel(ylabel)
         ax[-1].set_xlabel(r"Distance [R$_\star$]")
         return fig, ax
-        
+    
+    
     def save(self, outpath:str=None):
         """
         Saves the wind solution
@@ -375,11 +212,10 @@ class Corona:
         """
         if outpath is None:
             dens = f"{int(self.n0.cgs.value/1e9)}e9"
-            temp = f"{int(self.temp.cgs.value/1e6)}MK"
+            temp = f"{int(self.T0.cgs.value/1e6)}MK"
             field = f"{int(self.B0.cgs.value)}G"
             outpath = f"{os.getcwd()}/corona_n0{dens}_temp{temp}_field{field}.npz"
         np.savez(outpath, self.__dict__)    
-        
         return
 
     

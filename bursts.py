@@ -252,8 +252,8 @@ class Burst:
         :type return_profile: bool, optional
         :return: If return_profile is True, returns the frequencies and the fit profile
         :rtype: tuple of ndarray
-
         """
+        
         assert('profile_freqs' in self.__dict__.keys()), "Need to run make_frequency_profile() first"
         
         freqs = self.profile_freqs
