@@ -183,6 +183,7 @@ class Burst:
         if dist_vec[-1] + width_vec[-1]/2 > self.corona.r_vec[-1].cgs - self.corona.star.R_star.cgs:
             max_dist = self.corona.star.R_star + dist_vec[-1] + width_vec[-1]/2 
             self.corona.update_max_distance(max_dist)
+            self.set_vmin()
         
         dyn_spec = np.zeros((len(tvec), len(sb)))#*np.nan   
         
