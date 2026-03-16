@@ -2,13 +2,14 @@
 # -*- coding: utf-8 -*-
 
 from misc import un, const, density_to_frequency, np, plt, os
+from corona import Corona
 from default_vals.burst_vals import default_ii_vals, default_iii_vals
 import copy
 from scipy.optimize import curve_fit
 
 
 class Burst:
-    def __init__(self, burst_type:str, **kwargs):
+    def __init__(self, corona:Corona, burst_type:str, **kwargs):
         """
         Class for estimating type II or III burst structure in dynamic spectra 
         and estimating related properties
@@ -42,6 +43,7 @@ class Burst:
                 
         for k in kwargs:
             self.__dict__.update({k:kwargs[k]})
+        self.corona = corona
         self.starting_height = self.starting_height_factor * self.corona.star.R_star
         self.starting_width = self.starting_width_factor  * self.corona.star.R_star
         self.burst_type = btype

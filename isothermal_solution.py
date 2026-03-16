@@ -135,8 +135,8 @@ class Isothermal_Corona(Corona):
         
     
     def get_density(self, dist_from_surface, return_idxs:bool=False, predict:bool=True):
-        super().get_density(dist_from_surface, return_idxs, predict)
-        return
+        sol = super().get_density(dist_from_surface, return_idxs, predict)
+        return sol
 
     
     def update_max_distance(self, new_max_dist):

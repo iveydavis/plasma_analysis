@@ -97,6 +97,8 @@ class Polytropic_Corona(Corona):
         
         idx = np.where(np.abs(diff) == np.nanmin(np.abs(diff)))[0]
         self.sc = sc_vals[idx][0]
+        if self.sc < 1:
+            self.sc = 1
         return
 
         
@@ -125,6 +127,7 @@ class Polytropic_Corona(Corona):
         
         if 'sc' not in self.__dict__.keys():
             self.calc_sc()
+        
         self.vc = (self.cg**2/self.sc)**0.5
         return
     
@@ -145,6 +148,8 @@ class Polytropic_Corona(Corona):
         s_vec = self.r_vec/self.star.R_star
         vc = self.vc
         sc = self.sc
+        if sc < 1:
+            sc = 1
         gam = self.poly_idx
         self.velocity_profile = np.zeros(len(s_vec))*vc.unit
         vmax = 100
@@ -200,8 +205,8 @@ class Polytropic_Corona(Corona):
     
     
     def get_density(self, dist_from_surface, return_idxs:bool=False, predict:bool=True):
-        super().get_density(dist_from_surface, return_idxs, predict)
-        return
+        sol = super().get_density(dist_from_surface, return_idxs, predict)
+        return sol
 
     
     def update_max_distance(self, new_max_dist):

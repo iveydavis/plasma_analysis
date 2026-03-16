@@ -5,7 +5,6 @@ from misc import const, un
 from corona import Corona
 
 default_iii_vals = {
-    'corona': Corona(process=True),
     'vb': 0.5*const.c,
     'starting_height_factor': 0.1,
     'starting_width_factor': 0.1,
@@ -13,7 +12,6 @@ default_iii_vals = {
 
     
 default_ii_vals = {
-    'corona': Corona(process=True),
     'vb': 500*un.km/un.s,
     'starting_height_factor': 0.1,
     'starting_width_factor': 0.1,
