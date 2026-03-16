@@ -195,6 +195,7 @@ class Polytropic_Corona(Corona):
             vmax = self.velocity_profile[i].to('km/s').value + 0.1*dv
             vmin = self.velocity_profile[i].to('km/s').value     
         super()._get_other_wind_properties(self.velocity_profile, find_open=find_open, alf_dist=alf_dist)
+        self.temperature_profile = self.T0 * (self.n0/self.number_density_profile)**(1-self.poly_idx)
         return
     
     
