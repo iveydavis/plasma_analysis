@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from corona import Corona
-from default_vals.corona_vals import default_isothermal_vals
-from misc import const, un, check_units, np
+from swabs.corona import Corona
+from swabs.default_vals.corona_vals import default_isothermal_vals
+from swabs.misc import const, un, check_units, np
 
 class Isothermal_Corona(Corona):
     def __init__(self, process=False, **kwargs):

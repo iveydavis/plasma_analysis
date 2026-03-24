@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from misc import un, const, G
-from star import Star
+from swabs.misc import un, const, G
+from swabs.star import Star
 import copy
 
 default_isothermal_vals = {

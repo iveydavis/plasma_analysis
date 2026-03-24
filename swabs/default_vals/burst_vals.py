@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from misc import const, un
-from corona import Corona
+from swabs.misc import const, un
+from swabs.corona import Corona
 
 default_iii_vals = {
     'vb': 0.5*const.c,

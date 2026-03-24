@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from misc import check_units
-from default_vals.star_vals import default_star_vals
+from swabs.misc import check_units
+from swabs.default_vals.star_vals import default_star_vals
 
 
 class Star:

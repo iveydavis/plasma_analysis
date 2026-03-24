@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from misc import un, const, np, plt, check_units
-from default_vals.corona_vals import default_polytrope_vals 
-from corona import Corona
+from swabs.misc import un, const, np, plt, check_units
+from swabs.default_vals.corona_vals import default_polytrope_vals 
+from swabs.corona import Corona
 
 class Polytropic_Corona(Corona):
     def __init__(self, **kwargs):

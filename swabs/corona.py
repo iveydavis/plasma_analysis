@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from misc import un, const, np, plt, calc_thermal_electron_speed
+from swabs.misc import un, const, np, plt, calc_thermal_electron_speed
 import os
 
 class Corona:
@@ -50,7 +50,7 @@ class Corona:
                 if alf_dist is None:
                     alf_idx = np.where(alf_speed < velocities)[0][0]
                 elif alf_dist is not None:
-                    alf_idx = np.where(self.r_vec > alf_dist)[0][0]
+                    alf_idx = np.where(self.r_vec >= alf_dist)[0][0]
                 density[alf_idx:] = density[alf_idx] *  (self.r_vec[alf_idx]/self.r_vec[alf_idx:])**2
                 velocities[alf_idx:] = velocities[alf_idx]
                 B_field[alf_idx:] = B_field[alf_idx] *  (self.r_vec[alf_idx]/self.r_vec[alf_idx:])**2

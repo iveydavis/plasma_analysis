@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from misc import un, const, density_to_frequency, np, plt, os
-from corona import Corona
-from default_vals.burst_vals import default_ii_vals, default_iii_vals
+from swabs.misc import un, const, density_to_frequency, np, plt, os
+from swabs.corona import Corona
+from swabs.default_vals.burst_vals import default_ii_vals, default_iii_vals
 import copy
 from scipy.optimize import curve_fit
 
@@ -246,7 +246,7 @@ class Burst:
         """
         Fits the drift rate to estimate de-dispersion parameters. Updates
         drift_rate_params
-        :param freq_range: The frequency range to do the fit over. If None, then 
+        :param freq_range: The frequency range to do the fit over, in units of MHz. If None, then 
             it does it over the entire frequency range from make_frequency_profile, 
             defaults to None
         :type freq_range: tuple, optional
@@ -259,8 +259,8 @@ class Burst:
         
         assert('profile_freqs' in self.__dict__.keys()), "Need to run make_frequency_profile() first"
         
-        freqs = self.profile_freqs
-        times = self.profile_times
+        freqs = self.profile_freqs.to("MHz").value
+        times = self.profile_times.to("s").value
         
         dnudt = (freqs - np.roll(freqs, 1))/(times[1] - times[0])
         dnudt = dnudt[1:]
@@ -274,6 +274,17 @@ class Burst:
             except Exception as e:
                 raise Exception(e)
                 
+        for i, dnut in enumerate(dnudt):
+            if dnut == 0:
+                if i != 0 or i <= len(dnudt) - 2:
+                    prev = np.log10(np.abs(dnudt[i-1]))
+                    foll = np.log10(np.abs(dnudt[i+1]))
+                    dnudt[i] = -10**((prev + foll)/2) 
+                if i == len(dnudt) -1:
+                    prev2 = np.abs(dnudt[i-2])
+                    prev1 = np.abs(dnudt[i-1])
+                    dnudt[i] = prev2 - 2*prev1 
+                    
         fit, __ = curve_fit(drift_v_freq, freqs, dnudt)
         self.drift_fit_params = fit
         
@@ -337,13 +348,13 @@ class Burst:
 
         """
         if a is None or alpha is None:
-            self.fit_dispersion_properties()
+            self.fit_drift_rate()
         if a is None:
             a = self.drift_fit_params[0]
         if alpha is None:
             alpha = self.drift_fit_params[1]
         
-        freqs_flip = np.flip(self.dynspec_freqs[:-1])
+        freqs_flip = np.flip(self.dynspec_freqs[:-1]).to('MHz').value
         ds = np.flip(copy.deepcopy(self.dyn_spec), axis = 0)
         
         dt = (self.dynspec_times[1] - self.dynspec_times[0]).to('s').value
