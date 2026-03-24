@@ -123,6 +123,8 @@ class Isothermal_Corona(Corona):
             ie = failed_idx[-1] + buff
             if i0 < 1:
                 i0 = 1
+            if ie > len(diff):
+                ie = len(diff) - 1
             
             dx = ie  - i0 
             dy = velocities[ie] - velocities[i0]
