@@ -150,7 +150,7 @@ class Corona:
         Calculates debye lengths as function of distance. Updates debye_lengths property
         """
         
-        freqs = 9800 * un.Hz * 2 * np.pi * np.sqrt(self.number_density_profile.to('cm**-3').value)
+        freqs = 8978 * un.Hz * 2 * np.pi * np.sqrt(self.number_density_profile.to('cm**-3').value)
         vTe = calc_thermal_electron_speed(self.temperature_profile)
         self.debye_lengths = (vTe/freqs).to('cm')
         return

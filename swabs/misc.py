@@ -40,14 +40,14 @@ def density_to_frequency(density):
     if type(density) != un.quantity.Quantity:
         print("No units provided for density; assuming in cubic centimeters")
         density *= un.cm**-3
-    freq = 9.8 * un.kHz.to('MHz') * np.sqrt(density.to('cm**-3').value) * un.MHz
+    freq = 8.978 * un.kHz.to('MHz') * np.sqrt(density.to('cm**-3').value) * un.MHz
     return freq
 
 def frequency_to_density(frequency):
     if type(frequency) != un.quantity.Quantity:
         print("No units provided, assuming in MHz")
         frequency *= un.MHz
-    dens = ((frequency/(9.8*un.kHz)).to(''))**2
+    dens = ((frequency/(8.978*un.kHz)).to(''))**2
     return dens * un.cm**-3
 
 
