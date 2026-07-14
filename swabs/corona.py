@@ -42,7 +42,7 @@ class Corona:
         :type alf_dist: un.quantity.Quantity, optional
 
         """
-        density = self.n0 * self.mass_fraction*const.m_p*(self.r_vec[0]/self.r_vec)**2 * (velocities[0]/velocities)
+        density = self.n0 * self.mass_fraction*const.m_p/ self.mean_mol_weight * (self.r_vec[0]/self.r_vec)**2 * (velocities[0]/velocities)
         B_field = self.B0/((self.r_vec/self.star.R_star).to(''))**3
         alf_speed = (B_field/np.sqrt(density * 4 * np.pi)).to('km/s')   
         if find_open:
@@ -60,7 +60,7 @@ class Corona:
             
         self.mag_field_profile = B_field
         self.mass_density_profile = density
-        self.number_density_profile = self.mass_density_profile/(const.m_p * self.mass_fraction)
+        self.number_density_profile = self.mass_density_profile/(const.m_p * self.mass_fraction) * self.mean_mol_weight
         self.velocity_profile = velocities
         self.alfven_speed = (self.mag_field_profile/np.sqrt(4 * np.pi * self.mass_density_profile)).to('km/s')
         return
