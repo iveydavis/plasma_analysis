@@ -11,8 +11,7 @@ default_isothermal_vals = {
     "star": Star(),
     "B0":1000*G,
     "r_res":300,
-    "mean_mol_weight":1,
-    "mass_fraction":1,
+    "mean_mol_weight":0.6,
     "r_max":40*const.R_sun.cgs
     }
 

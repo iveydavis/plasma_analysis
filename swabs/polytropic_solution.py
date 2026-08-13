@@ -16,8 +16,7 @@ class Polytropic_Corona(Corona):
             ** n0: base coronal number density, assumed in units per cubic cm if not defined
             ** r_res (int): number of of elements in the spatial array
             ** r_max: maximum physical distance in the spatial array, assumed in units of R_sun if not defined
-            ** mean_mol_weight: mean molecular weight of gas, default is 0.6
-            ** mass_fraction: isotopic mass fraction of the gas, default is 1 (hydrogen)
+            ** mean_mol_weight: mean molecular weight of fully ionised H+He gas, default is 0.6
             ** poly_idx: polytropic index of the gas
         """
         

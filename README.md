@@ -1,5 +1,5 @@
 ### Overview
-This is simple 1-D code for evaluating how type II and III bursts look in various coronae/winds. The work currently assumes:
+This is simple 1-D code for evaluating how type II and III bursts look in various coronae/winds composed of fully ionised Hydrogen and Helium. The work currently assumes:
 
 * The wind velocity follows a polytropic profile ($\gamma=1$ returns the E. Parker 1965 solution) that does not depend on stellar rotation
 * The magnetic field follows dipolar scaling and is "opened" at the Alfv\'en radius

@@ -3,6 +3,8 @@
 
 from swabs.misc import un, const, np, plt, calc_thermal_electron_speed
 import os
+# mu = 4/(6X + Y + 2)
+# X + Y = 1 for purely Hydrogen + Helium gas
 
 class Corona:
     def __init__(self, process=False, **kwargs):
@@ -13,6 +15,8 @@ class Corona:
         self.number_density_profile = np.zeros(len(self.r_vec))
         self.temperature_profile = np.zeros(len(self.r_vec))
         self.c0 = self.calc_c0()
+        self.mean_mol_weight = self.mean_mol_weight
+        self.mass_fraction_hydrogen = 4/(5 * self.mean_mol_weight) - 3/5 
         return
     
     def calc_c0(self):
@@ -42,16 +46,16 @@ class Corona:
         :type alf_dist: un.quantity.Quantity, optional
 
         """
-        density = self.n0 * self.mass_fraction*const.m_p/ self.mean_mol_weight * (self.r_vec[0]/self.r_vec)**2 * (velocities[0]/velocities)
+        mass_density = self.n0 * const.m_p.cgs * 2/(self.mass_fraction_hydrogen + 1) * (self.r_vec[0]/self.r_vec)**2 * (velocities[0]/velocities)
         B_field = self.B0/((self.r_vec/self.star.R_star).to(''))**3
-        alf_speed = (B_field/np.sqrt(density * 4 * np.pi)).to('km/s')   
+        alf_speed = (B_field/np.sqrt(mass_density * 4 * np.pi)).to('km/s')   
         if find_open:
             try:
                 if alf_dist is None:
                     alf_idx = np.where(alf_speed < velocities)[0][0]
                 elif alf_dist is not None:
                     alf_idx = np.where(self.r_vec >= alf_dist)[0][0]
-                density[alf_idx:] = density[alf_idx] *  (self.r_vec[alf_idx]/self.r_vec[alf_idx:])**2
+                mass_density[alf_idx:] = mass_density[alf_idx] *  (self.r_vec[alf_idx]/self.r_vec[alf_idx:])**2
                 velocities[alf_idx:] = velocities[alf_idx]
                 B_field[alf_idx:] = B_field[alf_idx] *  (self.r_vec[alf_idx]/self.r_vec[alf_idx:])**2
                 self.alf_dist = self.r_vec[alf_idx]
@@ -59,8 +63,8 @@ class Corona:
                 print("No Alfven radius found")
             
         self.mag_field_profile = B_field
-        self.mass_density_profile = density
-        self.number_density_profile = self.mass_density_profile/(const.m_p * self.mass_fraction) * self.mean_mol_weight
+        self.mass_density_profile = mass_density
+        self.number_density_profile = 0.5 * self.mass_density_profile/const.m_p.cgs * (self.mass_fraction_hydrogen + 1)
         self.velocity_profile = velocities
         self.alfven_speed = (self.mag_field_profile/np.sqrt(4 * np.pi * self.mass_density_profile)).to('km/s')
         return

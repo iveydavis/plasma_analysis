@@ -7,15 +7,14 @@ from swabs.misc import const, un, check_units, np
 class Isothermal_Corona(Corona):
     def __init__(self, process=False, **kwargs):
         """
-        Class for solving for winds and estimating coronal properties
+        Class for solving for winds and estimating properties of a Hydrogen+Helium corona
         :Keyword arguments:
             ** star: Star class instance with properties of the star to model the corona for
             ** temp: base coronal temperature, assumed in units Kelvin if not defined
             ** n0: base coronal number density, assumed in units per cubic cm if not defined
             ** r_res (int): number of of elements in the spatial array
             ** r_max: maximum physical distance in the spatial array, assumed in units of R_sun if not defined
-            ** mean_mol_weight: mean molecular weight of gas, default is 0.6
-            ** mass_fraction: isotopic mass fraction of the gas, default is 1 (hydrogen)
+            ** mean_mol_weight: mean molecular weight of fully ionised H+He gas, default is 0.6
         """
         for k in list(default_isothermal_vals.keys()):
             if k not in list(kwargs.keys()):
