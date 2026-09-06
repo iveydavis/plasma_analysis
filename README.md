@@ -1,3 +1,5 @@
+[![Tests](https://github.com/iveydavis/plasma_analysis/actions/workflows/tests.yml/badge.svg)](https://github.com/iveydavis/plasma_analysis/actions/workflows/tests.yml)
+
 ### Overview
 This is simple 1-D code for evaluating how type II and III bursts look in various coronae/winds composed of fully ionised Hydrogen and Helium. The work currently assumes:
 
@@ -11,3 +13,10 @@ This is simple 1-D code for evaluating how type II and III bursts look in variou
 * Run `git clone https://github.com/iveydavis/plasma_analysis.git ` or directly download code
 * In the `plasma_analysis` path, run `pip install .`
 * From python: `from swabs import star, isothermal_solution, polytropic_solution, bursts `
+
+### Running Tests
+
+The test suite lives in `tests/` and runs with [pytest](https://docs.pytest.org/).
+
+* Install the package together with its test dependencies: `pip install ".[test]"`
+* From the `plasma_analysis` path, run `pytest`

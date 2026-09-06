@@ -1,4 +1,10 @@
 __pycache__
+*.py[cod]
 swabs.egg-info
+*.egg-info
 build
-swabs/__pycache__
+dist
+.ipynb_checkpoints
+.pytest_cache
+.venv
+venv

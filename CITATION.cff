@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: swabs
+abstract: >-
+  This is simple 1-D code for evaluating how type II and III bursts 
+  look in various coronae/winds composed of fully ionised Hydrogen and Helium.
+type: software
+authors:
+  - family-names: Davis
+    given-names: Ivey
+    affiliation: "Netherlands Institute for Radio Astronomy"
+    orcid: "https://orcid.org/0000-0001-5397-5969"
+version: 0.1.0
+date-released: "2026-09-06"
+license: BSD-3-Clause
+repository-code: "https://github.com/iveydavis/plasma_analysis"
+keywords:
+  - astronomy
+  - astrophysics
